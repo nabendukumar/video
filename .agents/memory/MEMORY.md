@@ -1,0 +1,1 @@
+- [Recording behavior requirements](recording-behavior.md) — voice/video capture must be user-started, visible, stoppable, and local; only audio may continue in the background.
