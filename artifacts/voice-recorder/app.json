@@ -5,6 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "splash": {
+      "backgroundColor": "#f3f0e9"
+    },
     "scheme": "voice-recorder",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -16,7 +19,22 @@
     },
     "plugins": [
       "expo-router",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Voice Recorder to access the microphone when you start a recording.",
+          "enableBackgroundRecording": true,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Voice Recorder to access the camera when you choose video mode.",
+          "microphonePermission": "Allow Voice Recorder to record audio with your videos.",
+          "recordAudioAndroid": true
+        }
+      ],
       "expo-video",
       "expo-sharing"
     ],

@@ -85,11 +85,19 @@ export async function saveRecording(
 export async function removeRecording(
   recording: LocalRecording,
 ): Promise<void> {
-  await FileSystem.deleteAsync(recording.uri, { idempotent: true });
-  const remaining = (await loadRecordings()).filter(
+  const recordings = await loadRecordings();
+  const remaining = recordings.filter(
     (item) => item.id !== recording.id,
   );
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(remaining));
+  try {
+    await FileSystem.deleteAsync(recording.uri, { idempotent: true });
+  } catch (error) {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(recordings)).catch(
+      () => undefined,
+    );
+    throw error;
+  }
 }
 
 export function formatDuration(durationMs: number): string {
