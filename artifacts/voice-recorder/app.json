@@ -36,7 +36,8 @@
         }
       ],
       "expo-video",
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withBackgroundVideoService"
     ],
     "experiments": {
       "typedRoutes": true,
