@@ -36,6 +36,7 @@ minimumReleaseAgeExclude:
 
 packages:
   - artifacts/*
+  - artifacts/voice-recorder/modules/*
   - lib/*
   - lib/integrations/*
   - scripts

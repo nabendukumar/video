@@ -27,6 +27,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import {
+  addBackgroundVideoErrorListener,
+  startBackgroundVideoRecording,
+  stopBackgroundVideoRecording,
+} from 'expo-background-video-recorder';
+import {
   formatDuration,
   loadRecordings,
   saveRecording,
@@ -68,6 +73,7 @@ export default function RecorderScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [audioRecording, setAudioRecording] = useState(false);
   const [videoRecording, setVideoRecording] = useState(false);
+  const [nativeCameraHandedOff, setNativeCameraHandedOff] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -166,14 +172,20 @@ export default function RecorderScreen() {
     if (!videoSessionActiveRef.current || videoFinalizingRef.current) return;
     videoFinalizingRef.current = true;
     setIsSaving(true);
-    cameraRef.current?.stopRecording();
 
     try {
-      const result = await videoPromiseRef.current;
-      if (result?.uri) {
+      let sourceUri: string | undefined;
+      if (Platform.OS === 'android') {
+        sourceUri = await stopBackgroundVideoRecording();
+      } else {
+        cameraRef.current?.stopRecording();
+        const result = await videoPromiseRef.current;
+        sourceUri = result?.uri;
+      }
+      if (sourceUri) {
         await saveRecording(
           'video',
-          result.uri,
+          sourceUri,
           Math.max(0, Date.now() - videoStartedAtRef.current),
         );
         setSavedCount((count) => count + 1);
@@ -186,6 +198,8 @@ export default function RecorderScreen() {
       videoPromiseRef.current = null;
       videoFinalizingRef.current = false;
       setVideoRecording(false);
+      setNativeCameraHandedOff(false);
+      if (Platform.OS === 'android') setCameraReady(false);
       setIsSaving(false);
       await setAudioModeAsync({
         allowsRecording: false,
@@ -197,14 +211,35 @@ export default function RecorderScreen() {
   finishVideoRef.current = finishVideoRecording;
 
   useEffect(() => {
+    const subscription = addBackgroundVideoErrorListener((message) => {
+      if (!videoSessionActiveRef.current) return;
+      videoSessionActiveRef.current = false;
+      setVideoRecording(false);
+      setNativeCameraHandedOff(false);
+      setCameraReady(false);
+      setErrorMessage(message);
+      void setAudioModeAsync({
+        allowsRecording: false,
+        allowsBackgroundRecording: false,
+        playsInSilentMode: true,
+      }).catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'background' && videoSessionActiveRef.current) {
+      if (
+        nextState === 'background' &&
+        Platform.OS !== 'android' &&
+        videoSessionActiveRef.current
+      ) {
         void finishVideoRef.current();
       }
     });
     return () => {
       subscription.remove();
-      if (videoSessionActiveRef.current) {
+      if (Platform.OS !== 'android' && videoSessionActiveRef.current) {
         cameraRef.current?.stopRecording();
         void finishVideoRef.current();
       }
@@ -318,6 +353,18 @@ export default function RecorderScreen() {
         allowsBackgroundRecording: false,
         playsInSilentMode: true,
       });
+      if (Platform.OS === 'android') {
+        setNativeCameraHandedOff(true);
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        const uri = await startBackgroundVideoRecording(facing);
+        videoStartedAtRef.current = Date.now();
+        videoSessionActiveRef.current = true;
+        setVideoRecording(true);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        return;
+      }
       videoStartedAtRef.current = Date.now();
       videoSessionActiveRef.current = true;
       setVideoRecording(true);
@@ -340,6 +387,8 @@ export default function RecorderScreen() {
     } catch (error) {
       videoSessionActiveRef.current = false;
       setVideoRecording(false);
+      setNativeCameraHandedOff(false);
+      if (Platform.OS === 'android') setCameraReady(false);
       setErrorMessage(messageFromError(error));
       await setAudioModeAsync({
         allowsRecording: false,
@@ -546,6 +595,7 @@ export default function RecorderScreen() {
             facing={facing}
             setFacing={setFacing}
             isRecording={videoRecording}
+            nativeRecording={nativeCameraHandedOff}
             duration={formatDuration(displayedDuration)}
           />
         )}
@@ -694,12 +744,14 @@ export default function RecorderScreen() {
           </View>
           <View style={styles.infoCopy}>
             <Text style={[styles.infoTitle, { color: colors.foreground }]}>
-              {mode === 'audio' ? 'Audio can continue screen-off' : 'Keep video in view'}
+              {mode === 'audio'
+                ? 'Audio can continue screen-off'
+                : 'Android background video'}
             </Text>
             <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
               {mode === 'audio'
                 ? 'Android shows an ongoing recording notification with a stop action. You can end the recording there at any time.'
-                : 'Android requires the camera to stay in the foreground. Video stops when the app moves to the background.'}
+                : 'Android uses a camera foreground service to support recording while minimized or with the screen off.'}
             </Text>
           </View>
         </View>
@@ -826,6 +878,7 @@ function VideoDeck({
   facing,
   setFacing,
   isRecording,
+  nativeRecording,
   duration,
 }: {
   colors: Theme;
@@ -837,6 +890,7 @@ function VideoDeck({
   facing: CameraType;
   setFacing: React.Dispatch<React.SetStateAction<CameraType>>;
   isRecording: boolean;
+  nativeRecording: boolean;
   duration: string;
 }) {
   const permanentlyDenied =
@@ -884,14 +938,23 @@ function VideoDeck({
             { backgroundColor: colors.background },
           ]}
         >
-          <CameraView
-            ref={cameraRef}
-            style={StyleSheet.absoluteFill}
-            facing={facing}
-            mode="video"
-            videoQuality="720p"
-            onCameraReady={() => setCameraReady(true)}
-          />
+          {nativeRecording ? (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: colors.background },
+              ]}
+            />
+          ) : (
+            <CameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing={facing}
+              mode="video"
+              videoQuality="720p"
+              onCameraReady={() => setCameraReady(true)}
+            />
+          )}
           <View style={styles.cameraTopOverlay}>
             <View
               style={[

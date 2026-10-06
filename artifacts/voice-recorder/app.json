@@ -13,7 +13,17 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.CAMERA"
+      ],
+      "package": "com.anonymous.voicerecorder"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -35,6 +45,7 @@
           "recordAudioAndroid": true
         }
       ],
+      "./plugins/with-background-video-recording",
       "expo-video",
       "expo-sharing"
     ],
