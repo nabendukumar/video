@@ -1,0 +1,3 @@
+- [Recording behavior requirements](recording-behavior.md) — voice/video capture must be user-started, visible, stoppable, and local; only audio may continue in the background.
+- [Expo preview link domains](expo-preview-domain.md) — use the current Replit-injected Expo host and fresh Expo Go QR; don't reuse an old `.repl.co` link.
+- [Workspace package installs](workspace-package-installs.md) — target app dependencies with pnpm's workspace filter; generic package installs can target the monorepo root.
